@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>Minesweeper</title>
+    <style>
+    .main {
+        --width: 200px;
+        width: var(--width);
+        height: var(--width);
+        box-shadow: 0px 0px 0px 0.5px #000;
+    }
+    
+    .box {
+        float: left;
+        width: 20px;
+        height: 20px;
+        text-align: center;
+        justify-content: center;
+        box-shadow: inset 0px 0px 0px 0.5px #000;
+        user-select: none;
+        cursor: pointer;
+    }
+    
+    .unknown {
+        background-color: #999;
+        box-shadow: inset 1px 1px 1px #ccc, inset -1px -1px 1px #000;
+    }
+    
+    .flag {
+        background-color: #999;
+        background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='20' height='20'><polygon points='9.76 14.33 9.76 7.1 10.81 7.1 10.81 14.33 9.76 14.33'/><polygon points='10.81 3.39 5.39 6.84 10.81 10.28' fill='#F00'/><rect x='7.81' y='13.31' width='4.97' height='1.44'/><rect x='5.6' y='14.6' width='9.36' height='1.84'/></svg>");
+        box-shadow: inset 1px 1px 1px #ccc, inset -1px -1px 1px #000;
+    }
+    
+    .bomb {
+        background-color: red;
+    }
+    
+    .empty {
+        background-color: darkgray;
+    }
+    </style>
+</head>
+
+<body>
+    <div class="main" id="main">
+    </div>
+    <script>
+    Array.fill = function(size, func) {
+        if (func)
+            return Array.apply(0, Array(size)).map((x, i) => func(i));
+
+        return Array.apply(0, Array(size)).map((x, i) => i);
+    }
+
+    function isClass(obj, className) {
+        return obj.classList.contains(className);
+    }
+
+    function appendClass(obj, className) {
+        return obj.classList.add(className) || true;
+    }
+
+    function deleteClass(obj, className) {
+        return isClass(obj, className) && (obj.classList.remove(className) || true)
+    }
+
+    function replaceClass(obj, aClass, bClass) {
+        return isClass(obj, aClass) && deleteClass(obj, aClass) && appendClass(obj, bClass);
+    }
+
+    var t = {
+        main: document.getElementById("main"),
+
+        value: undefined,
+        div: undefined,
+        suggestion: undefined,
+
+        isBounded: function(x, y) {
+            return x >= 0 && y >= 0 && x < this.size && y < this.size;
+        },
+
+        generateMap: function() {
+            let n = this.size * this.size;
+            this.value = Array.fill(n, i => 0);
+            this.suggestion = Array(n);
+
+            for (let i = 0; i < this.mines; i++) {
+                while (true) {
+                    let idx = Math.floor(Math.random() * n);
+                    if (this.value[idx]) continue;
+                    this.value[idx] = 1;
+                    break;
+                }
+            }
+
+            let get = (x, y) => this.isBounded(x, y) ? this.value[y * this.size + x] : 0;
+
+            for (let x = 0; x < this.size; x++)
+                for (let y = 0; y < this.size; y++) {
+                    this.suggestion[y * this.size + x] = get(x - 1, y) + get(x + 1, y) + get(x, y - 1) + get(x, y + 1) + get(x - 1, y - 1) + get(x - 1, y + 1) + get(x + 1, y - 1) + get(x + 1, y + 1);
+                }
+
+            this.div = this.value.map(x => {
+                var d = document.createElement("DIV"); /*d.innerText=x.toString();*/
+                d.classList += "box unknown";
+                this.main.appendChild(d);
+                return d;
+            });
+        },
+
+        reveal: function(x, y, size) {
+            this.value[y * size + x] = -1;
+
+            let check = (x, y) => this.isBounded(x, y) && this.suggestion[y * size + x] == 0 && this.value[y * size + x] == -1;
+
+            let needContinue = true;
+            while (needContinue) {
+                needContinue = false;
+                for (let i = 0; i < size; i++)
+                    for (let j = 0; j < size; j++) {
+                        if (this.value[j * size + i] == 0 && (check(i - 1, j) || check(i + 1, j) || check(i, j - 1) || check(i, j + 1) || check(i + 1, j - 1) || check(i + 1, j + 1) || check(i - 1, j - 1) || check(i - 1, j + 1))) {
+                            needContinue = this.value[j * this.size + i] != -1;
+                            this.value[j * this.size + i] = -1;
+                        }
+                    }
+            }
+
+            for (let i = 0; i < this.div.length; i++) {
+                if (this.value[i] == -1) {
+                    if (replaceClass(this.div[i], "unknown", "empty"))
+                        this.div[i].innerText = this.suggestion[i] > 0 ? this.suggestion[i] : "";
+                }
+            }
+        },
+
+        checkWin: function() {
+            let r = 0;
+
+            this.div.filter((x,i) => {
+            	if (isClass(x, "flag")) {
+            		if (this.value[i] > 0)
+            			r++;
+            		else
+            			r--;
+            	}
+            });
+
+            if (r == this.mines) {
+                setTimeout(() => {
+                    alert("Win");
+                    location.reload();
+                }, 100)
+            }
+        },
+
+        start: function(size, mines) {
+            this.size = size;
+            this.mines = mines;
+            let self = this;
+
+            this.main.addEventListener('mousedown', function(ev) {
+            	let x = Math.floor(ev.clientX / 20 - 0.5);
+                let y = Math.floor(ev.clientY / 20 - 0.5);
+
+	            let i = y * self.size + x;
+
+            	switch(ev.which) {
+            		case 1: {
+			            if (self.div[i].classList.contains("unknown")) {
+			                if (self.value[i] == 1) {
+			                    replaceClass(self.div[i], "unknown", "bomb");
+			                    self.div[i].innerText = "\u2738"
+			                    setTimeout(() => {
+			                        alert("Game Over");
+			                        location.reload();
+			                    }, 100)
+
+			                } else if (self.value[i] == 0)
+			                    self.reveal(x, y, self.size, 0, 0);
+            			}
+            		} break;
+            		case 3: {
+            			if (replaceClass(self.div[i], "flag", "unknown") == false)
+		                    replaceClass(self.div[i], "unknown", "flag");
+            		} break;
+            	}
+
+            	self.checkWin();
+
+                return false;
+            }, false);
+
+			this.main.addEventListener('contextmenu', event => event.preventDefault());
+            this.main.style.setProperty('--width', (this.size * 20).toString() + "px");
+            this.generateMap();
+        }
+    }.start(4, 1);
+    </script>
+</body>
+
+</html>
